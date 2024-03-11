@@ -3,6 +3,7 @@
 
 from transformers import T5EncoderModel
 from diffusers import PixArtAlphaPipeline
+from torch.profiler import profile, record_function, ProfilerActivity
 import torch
 import gc
 
@@ -38,21 +39,24 @@ del text_encoder
 del pipe
 flush()
 
+
 pipe = PixArtAlphaPipeline.from_pretrained(
     "PixArt-alpha/PixArt-XL-2-1024-MS",
     text_encoder=None,
     torch_dtype=torch.float16,
 ).to("cuda")
 
-latents = pipe(
-    negative_prompt=None,
-    prompt_embeds=prompt_embeds,
-    negative_prompt_embeds=negative_embeds,
-    prompt_attention_mask=prompt_attention_mask,
-    negative_prompt_attention_mask=negative_prompt_attention_mask,
-    num_images_per_prompt=1,
-    output_type="latent",
-).images
+with profile(activities=[ProfilerActivity.GPU], record_shapes=True) as prof:
+    with record_function("model_inference"):
+        latents = pipe(
+            negative_prompt=None,
+            prompt_embeds=prompt_embeds,
+            negative_prompt_embeds=negative_embeds,
+            prompt_attention_mask=prompt_attention_mask,
+            negative_prompt_attention_mask=negative_prompt_attention_mask,
+            num_images_per_prompt=1,
+            output_type="latent",
+        ).images
 
 del pipe.transformer
 flush()
